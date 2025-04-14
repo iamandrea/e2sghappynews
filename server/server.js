@@ -442,101 +442,102 @@ function analyzeContent(title, content = '') {
 function extractDate($, element, source) {
   let publishDate;
 
-  // Try source-specific date selector first
-  if (source.dateSelector) {
-    // Look in the parent article/container first
-    let dateElement = $(element).closest('article').find(source.dateSelector);
-    if (!dateElement.length) {
-      // If not found in article, search in parent containers
-      dateElement = $(element).parents().find(source.dateSelector).first();
-    }
-    if (dateElement.length) {
-      publishDate = dateElement.attr('datetime') || dateElement.attr('data-date') || dateElement.text();
-    }
-  }
-
-  // If no date found, try common patterns
-  if (!publishDate) {
-    const possibleElements = [
-      // Try time elements
-      $(element).closest('article').find('time'),
-      $(element).parents().find('time').first(),
-      
-      // Try elements with date-related classes
-      ...datePatterns.dateClasses.map(className => 
-        $(element).closest('article').find(`.${className}`).add(
-          $(element).parents().find(`.${className}`).first()
-        )
-      ),
-      
-      // Try elements with date-related attributes
-      ...datePatterns.dateAttributes.map(attr => 
-        $(element).closest('article').find(`[${attr}]`).add(
-          $(element).parents().find(`[${attr}]`).first()
-        )
-      )
-    ];
-
-    // Check each possible element
-    for (const el of possibleElements) {
-      if (el && el.length) {
-        // Try various attributes first
-        publishDate = el.attr('datetime') || 
-                     el.attr('data-date') || 
-                     el.attr('data-timestamp') || 
-                     el.text();
-        if (publishDate) break;
+  try {
+    // Try source-specific date selector first
+    if (source.dateSelector) {
+      const dateElement = $(element).closest('article').find(source.dateSelector);
+      if (dateElement.length > 0) {
+        publishDate = dateElement.attr('datetime') || dateElement.text();
       }
     }
-  }
 
-  if (publishDate) {
-    // Clean up the date string
-    publishDate = publishDate.trim()
-      .replace(/Published:?/i, '')
-      .replace(/Posted:?/i, '')
-      .replace(/Date:?/i, '')
-      .replace(/Updated:?/i, '')
-      .trim();
-
-    // Try parsing with moment using multiple formats
-    const parsedDate = moment(publishDate, datePatterns.dateFormats, true);
-    if (parsedDate.isValid()) {
-      return parsedDate.format('YYYY-MM-DD');
+    // If no date found, try common date patterns
+    if (!publishDate) {
+      // Try time tag
+      const timeTag = $(element).closest('article').find('time');
+      if (timeTag.length > 0) {
+        publishDate = timeTag.attr('datetime') || timeTag.text();
+      }
     }
 
-    // Try parsing with built-in Date parser as fallback
-    const dateObj = new Date(publishDate);
-    if (!isNaN(dateObj.getTime())) {
-      return moment(dateObj).format('YYYY-MM-DD');
+    if (!publishDate) {
+      // Try meta tags
+      $('meta').each((i, meta) => {
+        const property = $(meta).attr('property') || '';
+        const name = $(meta).attr('name') || '';
+        if (property.includes('time') || property.includes('date') ||
+            name.includes('time') || name.includes('date')) {
+          publishDate = $(meta).attr('content');
+          return false; // Break the loop
+        }
+      });
     }
-  }
 
-  // If we still can't find a date, check for relative date strings
-  const relativeDatePatterns = [
-    { regex: /(\d+)\s*days?\s*ago/i, unit: 'days' },
-    { regex: /(\d+)\s*weeks?\s*ago/i, unit: 'weeks' },
-    { regex: /(\d+)\s*months?\s*ago/i, unit: 'months' },
-    { regex: /yesterday/i, unit: 'days', value: 1 }
-  ];
+    if (!publishDate) {
+      // Try common date classes and patterns
+      const datePatterns = [
+        '.date',
+        '.published',
+        '.post-date',
+        '.entry-date',
+        '[itemprop="datePublished"]',
+        '.timestamp',
+        '.article-date'
+      ];
 
-  const containerText = $(element).closest('article').text() || $(element).parent().text();
-  for (const pattern of relativeDatePatterns) {
-    const match = containerText.match(pattern.regex);
-    if (match) {
-      const value = pattern.value || parseInt(match[1]);
-      return moment().subtract(value, pattern.unit).format('YYYY-MM-DD');
+      for (const pattern of datePatterns) {
+        const dateElement = $(element).closest('article').find(pattern);
+        if (dateElement.length > 0) {
+          publishDate = dateElement.attr('datetime') || dateElement.text();
+          break;
+        }
+      }
     }
-  }
 
-  // Default to today's date if no date found
-  return moment().format('YYYY-MM-DD');
+    // If we found a date, try to parse it
+    if (publishDate) {
+      // Try parsing with moment
+      let parsedDate = moment(publishDate);
+      
+      // If that fails, try some common formats
+      if (!parsedDate.isValid()) {
+        const formats = [
+          'YYYY-MM-DD',
+          'YYYY/MM/DD',
+          'DD-MM-YYYY',
+          'DD/MM/YYYY',
+          'MMM DD, YYYY',
+          'MMMM DD, YYYY',
+          'DD MMM YYYY',
+          'DD MMMM YYYY'
+        ];
+        
+        for (const format of formats) {
+          parsedDate = moment(publishDate, format);
+          if (parsedDate.isValid()) {
+            break;
+          }
+        }
+      }
+      
+      // If we successfully parsed the date, return it
+      if (parsedDate.isValid()) {
+        return parsedDate.format('YYYY-MM-DD');
+      }
+    }
+
+    // If all else fails, return today's date
+    return moment().format('YYYY-MM-DD');
+  } catch (error) {
+    console.error('Error extracting date:', error);
+    return moment().format('YYYY-MM-DD');
+  }
 }
 
 async function scrapeNews(since = null) {
   let articles = [];
-  const oneMonthAgo = moment().subtract(1, 'month');
-
+  const oneMonthAgo = moment().subtract(30, 'days').startOf('day'); // Set to start of day 30 days ago
+  
   for (const source of sources) {
     try {
       console.log(`Scraping ${source.name}...`);
@@ -583,10 +584,12 @@ async function scrapeNews(since = null) {
           
           if (analysis.isRelevant) {
             const publishDate = extractDate($, article, source);
-            console.log(`Found article: "${title}" with date: ${publishDate}`);
-            
-            // Only add articles from the last month and after the since date if provided
             const articleDate = moment(publishDate);
+            
+            // Log the date comparison for debugging
+            console.log(`Article "${title}" date: ${articleDate.format('YYYY-MM-DD')}, threshold: ${oneMonthAgo.format('YYYY-MM-DD')}`);
+            
+            // Only add articles from the last 30 days and after the since date if provided
             if (articleDate.isAfter(oneMonthAgo) && (!since || articleDate.isAfter(since))) {
               articles.push({
                 title,
@@ -619,10 +622,12 @@ async function scrapeNews(since = null) {
             
             if (analysis.isRelevant) {
               const publishDate = extractDate($, element, source);
-              console.log(`Found article: "${title}" with date: ${publishDate}`);
-              
-              // Only add articles from the last month and after the since date if provided
               const articleDate = moment(publishDate);
+              
+              // Log the date comparison for debugging
+              console.log(`Article "${title}" date: ${articleDate.format('YYYY-MM-DD')}, threshold: ${oneMonthAgo.format('YYYY-MM-DD')}`);
+              
+              // Only add articles from the last 30 days and after the since date if provided
               if (articleDate.isAfter(oneMonthAgo) && (!since || articleDate.isAfter(since))) {
                 articles.push({
                   title,
