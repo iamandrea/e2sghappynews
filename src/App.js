@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Container, Typography, Card, CardContent, Grid, AppBar, Toolbar, CircularProgress, Box, Chip, Stack } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import axios from 'axios';
+import moment from 'moment';
+
+// Use local server in development, deployed server in production
+const API_URL = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:5000'
+  : 'https://happy-news-api.onrender.com';
 
 const theme = createTheme({
   palette: {
@@ -32,21 +38,39 @@ const theme = createTheme({
 function App() {
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastFetchTime, setLastFetchTime] = useState(null);
 
+  const fetchNews = async (since = null) => {
+    try {
+      setLoading(!since); // Only show loading on initial fetch
+      const params = since ? { since: since.toISOString() } : {};
+      const response = await axios.get(`${API_URL}/api/news`, { params });
+      setNews(response.data);
+      setLastFetchTime(moment());
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching news:', error);
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch
   useEffect(() => {
-    const fetchNews = async () => {
-      try {
-        const response = await axios.get('http://localhost:5000/api/news');
-        setNews(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching news:', error);
-        setLoading(false);
-      }
-    };
-
+    console.log('Initial fetch');
     fetchNews();
   }, []);
+
+  // Set up periodic updates
+  useEffect(() => {
+    if (lastFetchTime) {
+      console.log('Setting up auto-refresh');
+      const interval = setInterval(() => {
+        console.log('Auto-refreshing...');
+        fetchNews(lastFetchTime);
+      }, 300000); // Check for new articles every 5 minutes
+      return () => clearInterval(interval);
+    }
+  }, [lastFetchTime]);
 
   const getThemeColor = (theme) => {
     const themeColors = {
@@ -109,7 +133,7 @@ function App() {
                       Source: {article.source}
                     </Typography>
                     <Typography color="textSecondary" gutterBottom>
-                      Date: {article.date}
+                      Date: {moment(article.date).format('MMMM D, YYYY')}
                     </Typography>
                     <Typography color="primary" gutterBottom>
                       Impact Score: +{article.sentiment.toFixed(1)}
