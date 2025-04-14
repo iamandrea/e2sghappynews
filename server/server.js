@@ -5,6 +5,7 @@ const Sentiment = require('sentiment');
 const cors = require('cors');
 const moment = require('moment');
 const NodeCache = require('node-cache');
+const puppeteer = require('puppeteer');
 
 // Initialize Express and other middleware
 const app = express();
@@ -35,6 +36,49 @@ const datePatterns = {
     'DD MMMM YYYY'
   ]
 };
+
+// Environmental keywords
+const environmentalKeywords = [
+  'climate solution',
+  'renewable energy',
+  'sustainable',
+  'conservation',
+  'biodiversity',
+  'clean energy',
+  'environmental protection',
+  'green initiative',
+  'eco-friendly',
+  'carbon reduction',
+  'climate action',
+  'climate wins',
+  'nature',
+  'science',
+  'environment',
+  'eco friendly',
+  'sustainable living',
+  'protect our planet',
+  'restoration',
+  'preservation'
+];
+
+// Keywords to exclude
+const excludedKeywords = [
+  'crime',
+  'murder',
+  'death',
+  'killed',
+  'war',
+  'conflict',
+  'disaster',
+  'catastrophe',
+  'tragedy',
+  'crisis',
+  'scandal',
+  'controversy',
+  'politician',
+  'celebrity',
+  'gossip'
+];
 
 // Positive impact themes and their associated keywords
 const positiveThemes = {
@@ -94,124 +138,19 @@ const positiveThemes = {
   ]
 };
 
-// Keywords to exclude
-const excludeKeywords = [
-  // Politics and conflict
-  'politician',
-  'election',
-  'campaign',
-  'vote',
-  'party',
-  'protest',
-  'dispute',
-  'controversy',
-  'war',
-  'conflict',
-  'military',
-  'weapon',
-  
-  // Business/Corporate
-  'stock',
-  'market',
-  'profit',
-  'earnings',
-  'revenue',
-  'dividend',
-  'shares',
-  'investor',
-  
-  // Celebrity/Entertainment
-  'celebrity',
-  'star',
-  'actor',
-  'actress',
-  'movie',
-  'film',
-  'entertainment',
-  'hollywood',
-  
-  // Crime
-  'crime',
-  'arrest',
-  'police',
-  'criminal',
-  'court',
-  'trial',
-  'prison',
-  'sentence',
-  
-  // Misc
-  'death',
-  'died',
-  'kill',
-  'scandal',
-  'controversy',
-  'lawsuit',
-  'sue',
-  'litigation'
-];
-
-// Environmental keywords
-const environmentalKeywords = [
-  // Wildlife and Nature
-  'wildlife',
-  'species',
-  'animal',
-  'plant',
-  'forest',
-  'ocean',
-  'marine',
-  'ecosystem',
-  'biodiversity',
-  'habitat',
-  'conservation',
-  'endangered',
-  'protected',
-  
-  // Climate and Energy
-  'renewable',
-  'sustainable',
-  'clean energy',
-  'solar',
-  'wind power',
-  'green energy',
-  'carbon neutral',
-  'zero emission',
-  'climate solution',
-  
-  // Conservation
-  'preservation',
-  'restoration',
-  'recovery',
-  'regeneration',
-  'rewilding',
-  'conservation',
-  'protect',
-  'sanctuary',
-  'reserve',
-  
-  // Innovation
-  'breakthrough',
-  'innovation',
-  'solution',
-  'technology',
-  'discovery',
-  'research',
-  'study',
-  'finding',
-  
-  // Community
-  'community',
-  'local',
-  'initiative',
-  'project',
-  'volunteer',
-  'education',
-  'awareness',
-  'partnership'
-];
-
 const sources = [
+  {
+    name: 'BBC Environment',
+    url: 'https://www.bbc.com/news/science_and_environment',
+    baseUrl: 'https://www.bbc.com',
+    dateSelector: 'time'
+  },
+  {
+    name: 'BBC Climate',
+    url: 'https://www.bbc.com/news/topics/cmj34zmwm1zt',
+    baseUrl: 'https://www.bbc.com',
+    dateSelector: 'time'
+  },
   {
     name: 'The Guardian Environment',
     url: 'https://www.theguardian.com/environment',
@@ -220,7 +159,7 @@ const sources = [
   },
   {
     name: 'CNN Climate',
-    url: 'https://www.cnn.com/world/cnn-climate',
+    url: 'https://edition.cnn.com/climate',
     baseUrl: 'https://www.cnn.com',
     dateSelector: '.timestamp'
   },
@@ -394,11 +333,24 @@ const sources = [
   }
 ];
 
+async function scrapeWithPuppeteer(url) {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+  await page.goto(url, { waitUntil: 'networkidle2' });
+  const content = await page.content();
+  if (url.includes('bbc')) {
+    console.log(`Full HTML content received from ${url}:`, content); // Log full HTML content
+  }
+  await browser.close();
+  return content;
+}
+
 function analyzeContent(title, content = '') {
   const text = (title + ' ' + content).toLowerCase();
   
   // Check for excluded topics first
-  if (excludeKeywords.some(keyword => text.includes(keyword.toLowerCase()))) {
+  if (excludedKeywords.some(keyword => text.includes(keyword.toLowerCase()))) {
     return { isRelevant: false, score: 0, themes: [] };
   }
   
@@ -429,13 +381,33 @@ function analyzeContent(title, content = '') {
   // Get basic sentiment score
   const sentimentResult = sentiment.analyze(text);
   
-  // Calculate final score combining theme matches and sentiment
-  const finalScore = (themeScore * 2) + sentimentResult.score;
+  // Calculate normalized score (0-100)
+  const normalizedScore = Math.min(Math.max(((sentimentResult.score + 5) / 10) * 100, 0), 100);
+  
+  // Determine themes based on keywords
+  const themes = new Set();
+  if (text.includes('climate') || text.includes('carbon')) themes.add('climate');
+  if (text.includes('nature') || text.includes('wildlife')) themes.add('nature');
+  if (text.includes('science') || text.includes('research')) themes.add('science');
+  if (text.includes('community') || text.includes('people')) themes.add('community');
+  if (text.includes('renewable') || text.includes('energy')) themes.add('energy');
+  if (text.includes('sustainable') || text.includes('eco')) themes.add('sustainable');
+  
+  // Article is relevant if it:
+  // 1. Has a positive sentiment
+  // 2. Contains environmental keywords
+  // 3. Doesn't contain excluded keywords
+  // 4. Has meaningful length
+  const isRelevant = sentimentResult.score > 0 && 
+                     matchedThemes.length > 0 && 
+                     !excludedKeywords.some(keyword => text.includes(keyword.toLowerCase())) && 
+                     title.length > 20;
   
   return {
-    isRelevant: matchedThemes.length > 0 && finalScore > 0,
-    score: finalScore,
-    themes: matchedThemes
+    score: normalizedScore,
+    isRelevant,
+    themes: Array.from(themes),
+    keywords: matchedThemes
   };
 }
 
@@ -536,25 +508,19 @@ function extractDate($, element, source) {
 
 async function scrapeNews(since = null) {
   let articles = [];
-  const oneMonthAgo = moment().subtract(30, 'days').startOf('day'); // Set to start of day 30 days ago
-  
+  const oneMonthAgo = moment().subtract(30, 'days').startOf('day');
+
   for (const source of sources) {
     try {
       console.log(`Scraping ${source.name}...`);
-      const response = await axios.get(source.url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        },
-        timeout: 10000
-      });
-      
-      const $ = cheerio.load(response.data);
-      
-      // Find all article containers first
+
+      const responseData = await scrapeWithPuppeteer(source.url);
+      console.log(`Response received from ${source.name}:`, responseData.substring(0, 500)); // Log first 500 characters of response
+
+      const $ = cheerio.load(responseData);
       const articles_elements = $('article').add($('div.article')).add($('div.post'));
-      
+
       articles_elements.each((i, article) => {
-        // Try to find the title in order of preference
         let titleElement = $(article).find('h1.entry-title, h2.entry-title, h3.entry-title').first() ||
                           $(article).find('.article-title, .post-title').first() ||
                           $(article).find('h1:not(:has(img)), h2:not(:has(img)), h3:not(:has(img))').first();
@@ -579,18 +545,22 @@ async function scrapeNews(since = null) {
           if (!link.startsWith('http')) {
             link = source.baseUrl + (link.startsWith('/') ? link : '/' + link);
           }
-          
+
           const analysis = analyzeContent(title);
-          
-          if (analysis.isRelevant) {
-            const publishDate = extractDate($, article, source);
-            const articleDate = moment(publishDate);
-            
-            // Log the date comparison for debugging
-            console.log(`Article "${title}" date: ${articleDate.format('YYYY-MM-DD')}, threshold: ${oneMonthAgo.format('YYYY-MM-DD')}`);
-            
-            // Only add articles from the last 30 days and after the since date if provided
-            if (articleDate.isAfter(oneMonthAgo) && (!since || articleDate.isAfter(since))) {
+          const publishDate = extractDate($, article, source);
+          const articleDate = moment(publishDate);
+
+          console.log(`Article "${title}" date: ${articleDate.format('YYYY-MM-DD')}, threshold: ${oneMonthAgo.format('YYYY-MM-DD')}`);
+
+          // Only add articles from the last 30 days and after the since date if provided
+          if (articleDate.isAfter(oneMonthAgo) && (!since || articleDate.isAfter(since))) {
+            // Check for duplicates (case insensitive)
+            const isDuplicate = articles.some(a =>
+              a.title.toLowerCase() === title.toLowerCase() &&
+              a.link.toLowerCase() === link.toLowerCase()
+            );
+            // Check for tags and impact score
+            if (!isDuplicate && analysis.score > 0 && analysis.themes.length > 0) {
               articles.push({
                 title,
                 link,
@@ -599,61 +569,24 @@ async function scrapeNews(since = null) {
                 themes: analysis.themes,
                 date: publishDate
               });
+              console.log(`Added article: ${title}`);
+            } else {
+              console.log(`Article not added due to: ${isDuplicate ? 'duplicate' : (analysis.score <= 0 ? '0% impact score' : 'no tags')}`);
             }
           }
         }
       });
-
-      if (articles_elements.length === 0) {
-        $('a:not(:has(img))').each((i, element) => {
-          const title = $(element).text().trim()
-            .replace(/\s+/g, ' ')
-            .replace(/\n/g, ' ')
-            .replace(/^(By|From)\s+\w+\s+\w+/, '')
-            .trim();
-          let link = $(element).attr('href');
-          
-          if (link && title && title.length > 20 && !$(element).find('img').length) {
-            if (!link.startsWith('http')) {
-              link = source.baseUrl + (link.startsWith('/') ? link : '/' + link);
-            }
-            
-            const analysis = analyzeContent(title);
-            
-            if (analysis.isRelevant) {
-              const publishDate = extractDate($, element, source);
-              const articleDate = moment(publishDate);
-              
-              // Log the date comparison for debugging
-              console.log(`Article "${title}" date: ${articleDate.format('YYYY-MM-DD')}, threshold: ${oneMonthAgo.format('YYYY-MM-DD')}`);
-              
-              // Only add articles from the last 30 days and after the since date if provided
-              if (articleDate.isAfter(oneMonthAgo) && (!since || articleDate.isAfter(since))) {
-                articles.push({
-                  title,
-                  link,
-                  source: source.name,
-                  sentiment: analysis.score,
-                  themes: analysis.themes,
-                  date: publishDate
-                });
-              }
-            }
-          }
-        });
-      }
 
       console.log(`Found ${articles.length} articles from ${source.name}`);
     } catch (error) {
       console.error(`Error scraping ${source.name}:`, error.message);
     }
   }
-  
-  // Remove duplicates and sort by date (newest first)
+
   articles = Array.from(new Set(articles.map(a => JSON.stringify(a))))
     .map(a => JSON.parse(a))
     .sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf());
-  
+
   return articles;
 }
 
@@ -710,6 +643,12 @@ app.get('/api/news', async (req, res) => {
     console.error('Error in /api/news:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+app.delete('/api/cache/articles', (req, res) => {
+  cache.del(CACHE_KEYS.ARTICLES);
+  console.log('Cleared articles cache');
+  res.json({ message: 'Articles cache cleared' });
 });
 
 const PORT = process.env.PORT || 5000;

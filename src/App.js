@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Typography, Card, CardContent, Grid, AppBar, Toolbar, CircularProgress, Box, Chip, Stack } from '@mui/material';
+import { Container, Typography, Card, CardContent, Grid, AppBar, Toolbar, CircularProgress, Box, Chip, Stack, LinearProgress } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import axios from 'axios';
 import moment from 'moment';
@@ -18,11 +18,12 @@ const theme = createTheme({
       main: '#81c784',
     },
     theme: {
-      recovery: '#4caf50',
-      breakthrough: '#2196f3',
+      climate: '#2196f3',
+      nature: '#4caf50',
+      science: '#9c27b0',
       community: '#ff9800',
-      conservation: '#8bc34a',
-      hope: '#03a9f4',
+      energy: '#f44336',
+      sustainable: '#009688',
     },
   },
   typography: {
@@ -35,6 +36,15 @@ const theme = createTheme({
   },
 });
 
+// Function to get color based on impact score
+const getImpactColor = (score) => {
+  if (score >= 80) return '#4caf50';
+  if (score >= 60) return '#8bc34a';
+  if (score >= 40) return '#ffeb3b';
+  if (score >= 20) return '#ff9800';
+  return '#f44336';
+};
+
 function App() {
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +55,13 @@ function App() {
       setLoading(!since); // Only show loading on initial fetch
       const params = since ? { since: since.toISOString() } : {};
       const response = await axios.get(`${API_URL}/api/news`, { params });
-      setNews(response.data);
+      
+      // Remove duplicates based on title and link
+      const uniqueArticles = Array.from(new Map(
+        response.data.map(article => [article.title + article.link, article])
+      ).values());
+      
+      setNews(uniqueArticles);
       setLastFetchTime(moment());
       setLoading(false);
     } catch (error) {
@@ -54,13 +70,11 @@ function App() {
     }
   };
 
-  // Initial fetch
   useEffect(() => {
     console.log('Initial fetch');
     fetchNews();
   }, []);
 
-  // Set up periodic updates
   useEffect(() => {
     if (lastFetchTime) {
       console.log('Setting up auto-refresh');
@@ -74,11 +88,12 @@ function App() {
 
   const getThemeColor = (theme) => {
     const themeColors = {
-      recovery: '#4caf50',
-      breakthrough: '#2196f3',
+      climate: '#2196f3',
+      nature: '#4caf50',
+      science: '#9c27b0',
       community: '#ff9800',
-      conservation: '#8bc34a',
-      hope: '#03a9f4',
+      energy: '#f44336',
+      sustainable: '#009688',
     };
     return themeColors[theme] || '#757575';
   };
@@ -100,7 +115,7 @@ function App() {
         ) : (
           <Grid container spacing={3}>
             {news.map((article, index) => (
-              <Grid item xs={12} md={6} key={index}>
+              <Grid item xs={12} md={6} key={`${article.title}-${article.link}`}>
                 <Card 
                   sx={{ 
                     height: '100%',
@@ -121,7 +136,7 @@ function App() {
                           key={i}
                           label={theme.charAt(0).toUpperCase() + theme.slice(1)}
                           sx={{
-                            backgroundColor: getThemeColor(theme),
+                            backgroundColor: getThemeColor(theme.toLowerCase()),
                             color: 'white',
                             mb: 1,
                           }}
@@ -135,9 +150,31 @@ function App() {
                     <Typography color="textSecondary" gutterBottom>
                       Date: {moment(article.date).format('MMMM D, YYYY')}
                     </Typography>
-                    <Typography color="primary" gutterBottom>
-                      Impact Score: +{article.sentiment.toFixed(1)}
-                    </Typography>
+                    <Box sx={{ mb: 2 }}>
+                      <Typography color="textSecondary" gutterBottom>
+                        Impact Score:
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Box sx={{ flexGrow: 1, mr: 1 }}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={article.sentiment}
+                            sx={{
+                              height: 10,
+                              borderRadius: 5,
+                              backgroundColor: '#e0e0e0',
+                              '& .MuiLinearProgress-bar': {
+                                backgroundColor: getImpactColor(article.sentiment),
+                                borderRadius: 5,
+                              },
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="body2" color="textSecondary">
+                          {Math.round(article.sentiment)}%
+                        </Typography>
+                      </Box>
+                    </Box>
                     <Typography>
                       <a href={article.link} target="_blank" rel="noopener noreferrer">
                         Read More
