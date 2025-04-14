@@ -130,7 +130,7 @@ function App() {
                     },
                   }}
                 >
-                  <CardContent>
+                  <CardContent sx={{ width: '100%'}}>
                     <Typography variant="h6" component="h2" gutterBottom>
                       {article.title}
                     </Typography>
