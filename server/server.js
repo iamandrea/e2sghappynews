@@ -1,11 +1,10 @@
 const express = require('express');
-const axios = require('axios');
 const cheerio = require('cheerio');
 const Sentiment = require('sentiment');
 const cors = require('cors');
 const moment = require('moment');
 const NodeCache = require('node-cache');
-const puppeteer = require('puppeteer');
+const rp = require('request-promise');
 
 // Initialize Express and other middleware
 const app = express();
@@ -333,17 +332,86 @@ const sources = [
   }
 ];
 
-async function scrapeWithPuppeteer(url) {
-  const browser = await puppeteer.launch();
-  const page = await browser.newPage();
-  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-  await page.goto(url, { waitUntil: 'networkidle2' });
-  const content = await page.content();
-  if (url.includes('bbc')) {
-    console.log(`Full HTML content received from ${url}:`, content); // Log full HTML content
+async function scrapeNews(since = null) {
+  let articles = [];
+  const oneMonthAgo = moment().subtract(30, 'days').startOf('day');
+
+  for (const source of sources) {
+    try {
+      console.log(`Scraping ${source.name}...`);
+
+      const html = await rp(source.url);
+      const $ = cheerio.load(html);
+      const articles_elements = $('article').add($('div.article')).add($('div.post'));
+
+      articles_elements.each((i, article) => {
+        let titleElement = $(article).find('h1.entry-title, h2.entry-title, h3.entry-title').first() ||
+                          $(article).find('.article-title, .post-title').first() ||
+                          $(article).find('h1:not(:has(img)), h2:not(:has(img)), h3:not(:has(img))').first();
+
+        if (!titleElement.length) {
+          titleElement = $(article).find('a:not(:has(img))').filter(function() {
+            const text = $(this).text().trim();
+            return text.length > 20 && !$(this).find('img').length;
+          }).first();
+        }
+
+        let title = titleElement.text().trim();
+        let link = titleElement.prop('tagName') === 'A' ? titleElement.attr('href') : $(article).find('a').first().attr('href');
+
+        title = title
+          .replace(/\s+/g, ' ')
+          .replace(/\n/g, ' ')
+          .replace(/^(By|From)\s+\w+\s+\w+/, '')
+          .trim();
+
+        if (link && title && title.length > 20) {
+          if (!link.startsWith('http')) {
+            link = source.baseUrl + (link.startsWith('/') ? link : '/' + link);
+          }
+
+          const analysis = analyzeContent(title);
+          const publishDate = extractDate($, article, source);
+          const articleDate = moment(publishDate);
+
+          console.log(`Article "${title}" date: ${articleDate.format('YYYY-MM-DD')}, threshold: ${oneMonthAgo.format('YYYY-MM-DD')}`);
+
+          // Only add articles from the last 30 days and after the since date if provided
+          if (articleDate.isAfter(oneMonthAgo) && (!since || articleDate.isAfter(since))) {
+            // Check for duplicates (case insensitive)
+            const isDuplicate = articles.some(a =>
+              a.title.toLowerCase() === title.toLowerCase() &&
+              a.link.toLowerCase() === link.toLowerCase()
+            );
+            // Check for tags and impact score
+            if (!isDuplicate && analysis.score > 0 && analysis.themes.length > 0) {
+              articles.push({
+                title,
+                link,
+                source: source.name,
+                sentiment: analysis.score,
+                themes: analysis.themes,
+                date: publishDate
+              });
+              console.log(`Added article: ${title}`);
+            } else {
+              console.log(`Article not added due to: ${isDuplicate ? 'duplicate' : (analysis.score <= 0 ? '0% impact score' : 'no tags')}`);
+            }
+          }
+        }
+      });
+
+      console.log(`Found ${articles.length} articles from ${source.name}`);
+    } catch (error) {
+      console.error(`Error scraping ${source.name}:`, error.message);
+    }
   }
-  await browser.close();
-  return content;
+
+  articles = Array.from(new Set(articles.map(a => JSON.stringify(a))))
+    .map(a => JSON.parse(a))
+    .sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf());
+
+  return articles;
 }
 
 function analyzeContent(title, content = '') {
@@ -504,90 +572,6 @@ function extractDate($, element, source) {
     console.error('Error extracting date:', error);
     return moment().format('YYYY-MM-DD');
   }
-}
-
-async function scrapeNews(since = null) {
-  let articles = [];
-  const oneMonthAgo = moment().subtract(30, 'days').startOf('day');
-
-  for (const source of sources) {
-    try {
-      console.log(`Scraping ${source.name}...`);
-
-      const responseData = await scrapeWithPuppeteer(source.url);
-      console.log(`Response received from ${source.name}:`, responseData.substring(0, 500)); // Log first 500 characters of response
-
-      const $ = cheerio.load(responseData);
-      const articles_elements = $('article').add($('div.article')).add($('div.post'));
-
-      articles_elements.each((i, article) => {
-        let titleElement = $(article).find('h1.entry-title, h2.entry-title, h3.entry-title').first() ||
-                          $(article).find('.article-title, .post-title').first() ||
-                          $(article).find('h1:not(:has(img)), h2:not(:has(img)), h3:not(:has(img))').first();
-
-        if (!titleElement.length) {
-          titleElement = $(article).find('a:not(:has(img))').filter(function() {
-            const text = $(this).text().trim();
-            return text.length > 20 && !$(this).find('img').length;
-          }).first();
-        }
-
-        let title = titleElement.text().trim();
-        let link = titleElement.prop('tagName') === 'A' ? titleElement.attr('href') : $(article).find('a').first().attr('href');
-
-        title = title
-          .replace(/\s+/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/^(By|From)\s+\w+\s+\w+/, '')
-          .trim();
-
-        if (link && title && title.length > 20) {
-          if (!link.startsWith('http')) {
-            link = source.baseUrl + (link.startsWith('/') ? link : '/' + link);
-          }
-
-          const analysis = analyzeContent(title);
-          const publishDate = extractDate($, article, source);
-          const articleDate = moment(publishDate);
-
-          console.log(`Article "${title}" date: ${articleDate.format('YYYY-MM-DD')}, threshold: ${oneMonthAgo.format('YYYY-MM-DD')}`);
-
-          // Only add articles from the last 30 days and after the since date if provided
-          if (articleDate.isAfter(oneMonthAgo) && (!since || articleDate.isAfter(since))) {
-            // Check for duplicates (case insensitive)
-            const isDuplicate = articles.some(a =>
-              a.title.toLowerCase() === title.toLowerCase() &&
-              a.link.toLowerCase() === link.toLowerCase()
-            );
-            // Check for tags and impact score
-            if (!isDuplicate && analysis.score > 0 && analysis.themes.length > 0) {
-              articles.push({
-                title,
-                link,
-                source: source.name,
-                sentiment: analysis.score,
-                themes: analysis.themes,
-                date: publishDate
-              });
-              console.log(`Added article: ${title}`);
-            } else {
-              console.log(`Article not added due to: ${isDuplicate ? 'duplicate' : (analysis.score <= 0 ? '0% impact score' : 'no tags')}`);
-            }
-          }
-        }
-      });
-
-      console.log(`Found ${articles.length} articles from ${source.name}`);
-    } catch (error) {
-      console.error(`Error scraping ${source.name}:`, error.message);
-    }
-  }
-
-  articles = Array.from(new Set(articles.map(a => JSON.stringify(a))))
-    .map(a => JSON.parse(a))
-    .sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf());
-
-  return articles;
 }
 
 app.get('/api/news', async (req, res) => {
