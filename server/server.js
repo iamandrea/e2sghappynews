@@ -610,7 +610,7 @@ app.get('/api/news', async (req, res) => {
         if (newArticles.length > 0) {
           console.log(`Found ${newArticles.length} new articles`);
           // Merge new articles with cached ones
-          const allArticles = [...newArticles, ...cachedArticles];
+          const allArticles = [...newArticles, ...cachedArticyles];
           
           // Remove duplicates and sort
           const uniqueArticles = Array.from(new Set(allArticles.map(a => JSON.stringify(a))))
@@ -660,7 +660,8 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
