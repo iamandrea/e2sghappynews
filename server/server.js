@@ -1,17 +1,31 @@
 const express = require('express');
+const cors = require('cors');
 const cheerio = require('cheerio');
 const Sentiment = require('sentiment');
-const cors = require('cors');
 const moment = require('moment');
 const NodeCache = require('node-cache');
 const rp = require('request-promise');
+const path = require('path');
 
-// Initialize Express and other middleware
 const app = express();
 const sentiment = new Sentiment();
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
-app.use(cors());
+
+// CORS configuration
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://iamandrea.github.io', 'https://e2sghappynews.onrender.com']
+    : 'http://localhost:3000',
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../build')));
+}
 
 // Cache keys
 const CACHE_KEYS = {
@@ -574,6 +588,10 @@ function extractDate($, element, source) {
   }
 }
 
+app.get('/', (req, res) => {
+  res.send('Server is running!');
+});
+
 app.get('/api/news', async (req, res) => {
   try {
     const lastFetchTime = cache.get(CACHE_KEYS.LAST_FETCH);
@@ -635,7 +653,14 @@ app.delete('/api/cache/articles', (req, res) => {
   res.json({ message: 'Articles cache cleared' });
 });
 
+// Catch-all route to serve React app in production
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../build', 'index.html'));
+  });
+}
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port ${PORT}`);
 });
