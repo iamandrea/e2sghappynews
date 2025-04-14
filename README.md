@@ -1,70 +1,109 @@
-# Getting Started with Create React App
+# Earth To Sea Guardians - Happy News
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A React application that aggregates and displays positive environmental news from various sources. The application focuses on uplifting stories about environmental conservation, scientific breakthroughs, community initiatives, and wildlife protection.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- Scrapes environmental news from multiple reputable sources
+- Analyzes content for truly uplifting themes (not just positive sentiment)
+- Categorizes articles by themes like recovery, breakthrough, community, and conservation
+- Displays color-coded theme tags for easy visualization
+- Filters out non-environmental and negative content
+- Shows impact scores for each article
 
-### `npm start`
+## Installation
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+1. Clone the repository:
+```bash
+git clone https://github.com/{username}/e2sghappynews.git
+cd e2sghappynews
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+2. Install dependencies for both frontend and backend:
+```bash
+# Install frontend dependencies
+npm install
 
-### `npm test`
+# Install backend dependencies
+cd server
+npm install
+cd ..
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+3. Start the development servers:
+```bash
+# Start the backend server (from the server directory)
+cd server
+node server.js
 
-### `npm run build`
+# In a new terminal, start the frontend (from the project root)
+npm start
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+The application will be available at http://localhost:3000
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Deployment to GitHub Pages
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1. Update the `homepage` field in `package.json`:
+   Replace `{username}` with your GitHub username:
+```json
+{
+  "homepage": "https://{username}.github.io/e2sghappynews"
+}
+```
 
-### `npm run eject`
+2. Install the `gh-pages` package if you haven't already:
+```bash
+npm install --save-dev gh-pages
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+3. Deploy to GitHub Pages:
+```bash
+npm run deploy
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+This will build the application and deploy it to the `gh-pages` branch of your repository.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+4. Configure GitHub Repository:
+   - Go to your repository's Settings
+   - Scroll to the "GitHub Pages" section
+   - Select the `gh-pages` branch as the source
+   - Save the changes
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Your application will be available at `https://{username}.github.io/e2sghappynews`
 
-## Learn More
+## Backend Deployment
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+For the backend server, you'll need to deploy it to a service that can run Node.js applications. Some options include:
+- Heroku
+- DigitalOcean
+- AWS
+- Google Cloud Platform
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+After deploying the backend, update the API URL in the frontend code (src/App.js) to point to your deployed backend URL.
 
-### Code Splitting
+## Technology Stack
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+- Frontend:
+  - React
+  - Material-UI
+  - Axios
+  - Moment.js
 
-### Analyzing the Bundle Size
+- Backend:
+  - Node.js
+  - Express
+  - Cheerio (for web scraping)
+  - Sentiment (for content analysis)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## Contributing
 
-### Making a Progressive Web App
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## License
 
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+This project is licensed under the MIT License - see the LICENSE file for details.
