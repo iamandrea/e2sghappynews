@@ -115,12 +115,16 @@ function App() {
         ) : (
           <Grid container spacing={3}>
             {news.map((article, index) => (
-              <Grid item xs={12} md={6} key={`${article.title}-${article.link}`}>
+              <Grid item xs={12} key={`${article.title}-${article.link}`}
+                sx={{
+                  width: '100%',
+                }}>
                 <Card 
                   sx={{ 
+                    width: '100%', 
                     height: '100%',
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: 'row',
                     '&:hover': {
                       boxShadow: 6,
                     },
