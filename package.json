@@ -2,7 +2,7 @@
   "name": "e2sghappynews",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://{username}.github.io/e2sghappynews",
+  "homepage": "https://iamandrea.github.io/e2sghappynews",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
