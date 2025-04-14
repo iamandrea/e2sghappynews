@@ -2,7 +2,7 @@
   "name": "e2sghappynews",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://iamandrea.github.io/e2sghappynews",
+  "homepage": ".",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
@@ -15,8 +15,10 @@
     "axios": "^1.8.4",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
+    "docker": "^1.0.0",
     "express": "^5.1.0",
     "moment": "^2.30.1",
+    "puppeteer": "^24.6.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-scripts": "5.0.1",
@@ -29,7 +31,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "postinstall": "npx puppeteer install"
   },
   "eslintConfig": {
     "extends": [

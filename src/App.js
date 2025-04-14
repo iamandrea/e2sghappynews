@@ -6,8 +6,9 @@ import moment from 'moment';
 
 // Use local server in development, deployed server in production
 const API_URL = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:5000'
+  ? '' // 👈 this will automatically resolve to the same host
   : 'https://happy-news-api.onrender.com';
+
 
 const theme = createTheme({
   palette: {

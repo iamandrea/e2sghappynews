@@ -6,12 +6,24 @@ const cors = require('cors');
 const moment = require('moment');
 const NodeCache = require('node-cache');
 const puppeteer = require('puppeteer');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 // Initialize Express and other middleware
 const app = express();
 const sentiment = new Sentiment();
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
-app.use(cors());
+if (process.env.NODE_ENV === 'production') {
+  // In production (like on Render), only allow your GitHub Pages domain
+  app.use(cors({
+    origin: 'https://iamandrea.github.io',
+    methods: ['GET', 'POST']
+  }));
+} else {
+  // In development (local testing), allow all origins
+  app.use(cors());
+}
 app.use(express.json());
 
 // Cache keys
@@ -333,18 +345,69 @@ const sources = [
   }
 ];
 
-async function scrapeWithPuppeteer(url) {
-  const browser = await puppeteer.launch();
-  const page = await browser.newPage();
-  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-  await page.goto(url, { waitUntil: 'networkidle2' });
-  const content = await page.content();
-  if (url.includes('bbc')) {
-    console.log(`Full HTML content received from ${url}:`, content); // Log full HTML content
+async function launchBrowser() {
+  const basePath = '/home/node/.cache/puppeteer/chrome';
+  let executablePath = null;
+
+  try {
+    const folders = fs.readdirSync(basePath);
+    for (const folder of folders) {
+      const possiblePath = path.join(basePath, folder, 'chrome');
+      if (fs.existsSync(possiblePath)) {
+        executablePath = possiblePath;
+        break;
+      }
+    }
+  } catch (err) {
+    console.warn('No Chrome installation found at', basePath);
   }
-  await browser.close();
-  return content;
+
+  if (!executablePath) {
+    console.warn('Falling back to default Puppeteer path.');
+  } else {
+    console.log('Using Chrome at:', executablePath);
+  }
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: executablePath || undefined,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+
+  return browser;
 }
+
+
+
+async function scrapeWithPuppeteer(url) {
+  const browser = await launchBrowser();
+  const page = await browser.newPage();
+
+  try {
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      const resourceType = request.resourceType();
+      if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
+        request.abort();
+      } else {
+        request.continue();
+      }
+    });
+
+    // Add timeout and catch navigation issues
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 }); // 20 sec
+
+    const content = await page.content();
+    await browser.close();
+    return content;
+
+  } catch (error) {
+    console.error(`Puppeteer error scraping ${url}:`, error.message);
+    await browser.close();
+    return ''; // Return empty string to prevent crash
+  }
+}
+
 
 function analyzeContent(title, content = '') {
   const text = (title + ' ' + content).toLowerCase();
@@ -590,6 +653,8 @@ async function scrapeNews(since = null) {
   return articles;
 }
 
+
+// Your API routes
 app.get('/api/news', async (req, res) => {
   try {
     const lastFetchTime = cache.get(CACHE_KEYS.LAST_FETCH);
@@ -651,7 +716,19 @@ app.delete('/api/cache/articles', (req, res) => {
   res.json({ message: 'Articles cache cleared' });
 });
 
+
+// Serve static files from React build in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '..', 'build')));
+
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
+  });
+}
+
+
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
