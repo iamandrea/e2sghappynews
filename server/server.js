@@ -13,11 +13,14 @@ const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://iamandrea.github.io', 'https://e2sghappynews.onrender.com']
-    : 'http://localhost:3000',
+  origin: [
+    'http://localhost:3000',
+    'https://iamandrea.github.io',
+    'https://happy-news-api-167021058879.australia-southeast1.run.app'
+  ],
   optionsSuccessStatus: 200
 };
+
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -610,7 +613,7 @@ app.get('/api/news', async (req, res) => {
         if (newArticles.length > 0) {
           console.log(`Found ${newArticles.length} new articles`);
           // Merge new articles with cached ones
-          const allArticles = [...newArticles, ...cachedArticyles];
+          const allArticles = [...newArticles, ...cachedArticles];
           
           // Remove duplicates and sort
           const uniqueArticles = Array.from(new Set(allArticles.map(a => JSON.stringify(a))))

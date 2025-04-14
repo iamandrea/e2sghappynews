@@ -7,7 +7,8 @@ import moment from 'moment';
 // Use local server in development, deployed server in production
 const API_URL = process.env.NODE_ENV === 'development' 
   ? 'http://localhost:5000'
-  : 'https://happy-news-api.onrender.com';
+  : 'https://happy-news-api-167021058879.australia-southeast1.run.app'; // <— use your real GCP URL
+
 
 const theme = createTheme({
   palette: {
